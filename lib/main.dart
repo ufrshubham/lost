@@ -21,11 +21,11 @@ class Lost extends Forge2DGame
   Lost() : super(cameraComponent: cam);
 
   @override
-  Color backgroundColor() => const Color.fromARGB(255, 38, 62, 50);
+  Color backgroundColor() => const Color.fromARGB(246, 152, 15, 15);
 
   double get zoom => camera.viewfinder.zoom;
-  double get wallWidth => 80 / zoom;
-  double get wallThickness => 6 / zoom;
+  double get wallWidth => 120 / zoom;
+  double get wallThickness => 20 / zoom;
   double get wallSize => 10 * wallWidth;
   Vector2 get virtualSize => camera.viewport.virtualSize * 0.5 / zoom;
 
@@ -34,6 +34,7 @@ class Lost extends Forge2DGame
 
   @override
   Future<void> onLoad() async {
+    world.physicsWorld.setContactFilter(LostContactFilter());
     world = Forge2DWorld(children: [maze, player], gravity: Vector2.zero());
     camera.setBounds(
       Rectangle.fromLTRB(
@@ -60,11 +61,19 @@ class Lost extends Forge2DGame
   void onTapDown(TapDownEvent event) => player.shoot();
 }
 
+class LostContactFilter extends ContactFilter {
+  // @override
+  // bool shouldCollide(Fixture fixtureA, Fixture fixtureB) {
+  //   return super.shouldCollide(fixtureA, fixtureB);
+  // }
+}
+
 enum PlayerAnimationState { walking, shooting }
 
 class Player extends BodyComponent<Lost> with KeyboardHandler {
-  final _moveSpeed = 1000.0;
+  final _moveSpeed = 600.0;
   final _moveDirection = Vector2.zero();
+  final _gunPoint = PositionComponent(position: Vector2(0.7, -2.4));
   late final SpriteAnimationGroupComponent<PlayerAnimationState> _animation;
 
   @override
@@ -94,7 +103,7 @@ class Player extends BodyComponent<Lost> with KeyboardHandler {
       current: PlayerAnimationState.walking,
       anchor: Anchor.center,
     );
-    await add(_animation);
+    await addAll([_animation, _gunPoint]);
 
     final shootTicker =
         _animation.animationTickers![PlayerAnimationState.shooting]!;
@@ -134,7 +143,7 @@ class Player extends BodyComponent<Lost> with KeyboardHandler {
     if (_animation.current == PlayerAnimationState.walking) {
       _animation.animationTicker!.paused = _moveDirection.isZero();
     } else {
-      _moveDirection.setAll(0);
+      _moveDirection.scale(0.25);
     }
     body.linearVelocity = _moveDirection * _moveSpeed * dt;
   }
@@ -150,7 +159,12 @@ class Player extends BodyComponent<Lost> with KeyboardHandler {
     return super.onKeyEvent(event, keysPressed);
   }
 
-  void shoot() => _animation.current = PlayerAnimationState.shooting;
+  void shoot() {
+    if (_animation.current != PlayerAnimationState.shooting) {
+      _animation.current = PlayerAnimationState.shooting;
+      world.add(Bullet(position, Vector2(0, -1)..rotate(angle)));
+    }
+  }
 }
 
 class Maze extends BodyComponent<Lost> {
@@ -160,6 +174,7 @@ class Maze extends BodyComponent<Lost> {
 
   @override
   Body createBody() {
+    paint.color = Colors.black;
     final body = world.createBody(BodyDef(userData: this));
     for (var i = 0; i < maze.length; i++) {
       for (var j = 0; j < maze[i].length; j++) {
@@ -176,7 +191,7 @@ class Maze extends BodyComponent<Lost> {
         if (cell.left) {
           _createFixture(body, i + 0.5, j, pi * 0.5);
         }
-        if (i > 3 && j > 3 && random.nextBool() && random.nextBool()) {
+        if (i > 1 && j > 1 && random.nextBool() && random.nextBool()) {
           world.add(
             Zombie(
               Vector2((j + 0.5) * game.wallWidth, (i + 0.5) * game.wallWidth),
@@ -235,5 +250,40 @@ class Zombie extends BodyComponent<Lost> {
       ),
     );
     return body..createFixtureFromShape(CircleShape()..radius = 1);
+  }
+}
+
+class Bullet extends BodyComponent with ContactCallbacks {
+  Bullet(this.initalPosition, this.direction);
+
+  Vector2 initalPosition;
+  Vector2 direction;
+  final _speed = 50.0;
+
+  @override
+  Body createBody() {
+    final body = world.createBody(
+      BodyDef(
+        type: BodyType.dynamic,
+        bullet: true,
+        position: initalPosition,
+        linearVelocity: direction.scaled(_speed),
+        userData: this,
+      ),
+    );
+    final fixtureDef = FixtureDef(CircleShape()..radius = 0.1, isSensor: true);
+    return body..createFixture(fixtureDef);
+  }
+
+  @override
+  void beginContact(Object other, Contact contact) {
+    super.beginContact(other, contact);
+
+    if (other is Zombie) {
+      removeFromParent();
+      other.removeFromParent();
+    } else if (other is Maze) {
+      removeFromParent();
+    }
   }
 }
