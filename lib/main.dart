@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' hide Rectangle;
 import 'package:flame/components.dart';
+import 'package:flame/effects.dart';
 import 'package:flame/events.dart';
 import 'package:flame/experimental.dart';
 import 'package:flame/game.dart';
@@ -14,6 +15,7 @@ import 'package:maze_builder/maze_builder.dart';
 final random = Random();
 final tp = TextPaint(style: const TextStyle(fontSize: 10));
 final text = TextComponent(textRenderer: tp, anchor: Anchor.center);
+final fill = SpriteComponent(position: Vector2.all(-1), priority: -1);
 final cam = CameraComponent.withFixedResolution(
   width: 320,
   height: 180,
@@ -45,6 +47,9 @@ class Lost extends Forge2DGame
     text.position = cam.viewport.virtualSize * 0.5;
     text.text = 'Escape the maze';
     await images.loadAll(['ss.png', 'sw.png', 'zw.png']);
+    fill.sprite = await Sprite.load('fill.png');
+    await fill.add(OpacityEffect.fadeOut(LinearEffectController(2)));
+    cam.viewport.add(fill..scale = Vector2.all(5));
     world = Forge2DWorld(children: [maze, player], gravity: Vector2.zero());
     cam2.world = world;
     cam2.viewfinder.anchor = Anchor.topLeft;
@@ -68,6 +73,9 @@ class Lost extends Forge2DGame
       if (_elapsed > 3) {
         text.text = '';
         _elapsed = 0.0;
+        if (player.dead) {
+          paused = true;
+        }
       }
     }
   }
@@ -99,7 +107,9 @@ class Maze extends BodyComponent<Lost> {
   @override
   Body createBody() {
     paint.color = Colors.black;
-    final maze = generate(width: game.mazeSize, height: game.mazeSize, seed: 5);
+    final s = random.nextInt(100);
+    print('Seed: $s');
+    final maze = generate(width: game.mazeSize, height: game.mazeSize, seed: s);
     final body = world.createBody(BodyDef(userData: this));
     for (var i = 0; i < maze.length; i++) {
       for (var j = 0; j < maze[i].length; j++) {
@@ -116,7 +126,7 @@ class Maze extends BodyComponent<Lost> {
         if (cell.left) {
           _createFixture(body, i + 0.5, j, pi * 0.5);
         }
-        if (i >= 1 && j >= 1 && random.nextBool() && random.nextBool()) {
+        if (i > 1 && j > 1 && random.nextBool() && random.nextBool()) {
           world.add(Zombie(Vector2(j + 0.5, i + 0.5)));
         }
       }
@@ -219,6 +229,7 @@ class Player extends BodyComponent<Lost>
     super.beginContact(other, contact);
     if (other is Zombie) {
       text.text = 'You got caught by a zombie!';
+      fill.add(OpacityEffect.fadeIn(LinearEffectController(2)));
       dead = true;
     }
   }
@@ -341,6 +352,7 @@ class Exit extends BodyComponent<Lost> with ContactCallbacks {
     super.beginContact(other, contact);
     if (other is Player) {
       text.text = 'You escaped succesfully!';
+      fill.add(OpacityEffect.fadeIn(LinearEffectController(2)));
     }
   }
 }
