@@ -30,11 +30,12 @@ class Lost extends Forge2DGame
   double get wallSize => mazeSize * wallWidth;
   Vector2 get virtualSize => camera.viewport.virtualSize * 0.5 / zoom;
 
-  late final maze = Maze(mazeSize);
+  final maze = Maze();
   final player = Player();
 
   @override
   Future<void> onLoad() async {
+    await images.loadAll(['ss.png', 'sw.png', 'zw.png']);
     world = Forge2DWorld(children: [maze, player], gravity: Vector2.zero());
     cam2.world = world;
     cam2.viewfinder.anchor = Anchor.topLeft;
@@ -52,126 +53,30 @@ class Lost extends Forge2DGame
 
   @override
   void onMouseMove(PointerHoverInfo info) {
-    if (player.isMounted) {
-      player.body.setTransform(
-        player.body.position,
-        (screenToWorld(info.eventPosition.global) - player.position)
-            .screenAngle(),
-      );
-    }
+    player.body.setTransform(
+      player.body.position,
+      (screenToWorld(info.eventPosition.global) - player.position)
+          .screenAngle(),
+    );
   }
 
   @override
   void onTapDown(TapDownEvent event) => player.shoot();
-}
 
-enum PlayerAnimationState { walking, shooting }
-
-class Player extends BodyComponent<Lost> with KeyboardHandler {
-  final _moveSpeed = 600.0;
-  final _moveDirection = Vector2.zero();
-  final _gunPoint = PositionComponent(position: Vector2(0.7, -2.4));
-  late final SpriteAnimationGroupComponent<PlayerAnimationState> _animation;
-
-  @override
-  Future<void> onLoad() async {
-    super.onLoad();
-
-    final spriteSheet = SpriteSheet.fromColumnsAndRows(
-      image: await game.images.load('soldier-walking.png'),
-      columns: 17,
-      rows: 1,
+  SpriteSheet getSpriteSheet(String s, int r, int c) {
+    return SpriteSheet.fromColumnsAndRows(
+      image: images.fromCache(s),
+      rows: r,
+      columns: c,
     );
-
-    final spriteSheet2 = SpriteSheet.fromColumnsAndRows(
-      image: await game.images.load('soldier-shooting-fixed.png'),
-      columns: 17,
-      rows: 1,
-    );
-
-    _animation = SpriteAnimationGroupComponent<PlayerAnimationState>(
-      animations: {
-        PlayerAnimationState.walking:
-            spriteSheet.createAnimation(row: 0, stepTime: 0.1),
-        PlayerAnimationState.shooting:
-            spriteSheet2.createAnimation(row: 0, stepTime: 0.08, loop: false),
-      },
-      size: Vector2.all(5),
-      current: PlayerAnimationState.walking,
-      anchor: Anchor.center,
-    );
-    await addAll([_animation, _gunPoint]);
-
-    final shootTicker =
-        _animation.animationTickers![PlayerAnimationState.shooting]!;
-    shootTicker.onComplete = () {
-      shootTicker.reset();
-      _animation.current = PlayerAnimationState.walking;
-    };
-
-    camera.follow(this);
-    renderBody = false;
-  }
-
-  @override
-  Body createBody() {
-    final body = world.createBody(
-      BodyDef(
-        type: BodyType.dynamic,
-        position: Vector2.all(game.wallWidth * 0.5),
-        userData: this,
-      ),
-    );
-    body.createFixtureFromShape(
-      CircleShape()
-        ..radius = 1
-        ..position.setValues(0, 0.8),
-    );
-    body.createFixtureFromShape(
-      CircleShape()
-        ..radius = 1.2
-        ..position.setValues(0.4, -0.9),
-    );
-    return body;
-  }
-
-  @override
-  void update(double dt) {
-    if (_animation.current == PlayerAnimationState.walking) {
-      _animation.animationTicker!.paused = _moveDirection.isZero();
-    } else {
-      _moveDirection.scale(0.25);
-    }
-    body.linearVelocity = _moveDirection * _moveSpeed * dt;
-  }
-
-  @override
-  bool onKeyEvent(RawKeyEvent event, Set<LogicalKeyboardKey> keysPressed) {
-    _moveDirection.setAll(0);
-    _moveDirection.x += keysPressed.contains(LogicalKeyboardKey.keyA) ? -1 : 0;
-    _moveDirection.x += keysPressed.contains(LogicalKeyboardKey.keyD) ? 1 : 0;
-    _moveDirection.y += keysPressed.contains(LogicalKeyboardKey.keyW) ? -1 : 0;
-    _moveDirection.y += keysPressed.contains(LogicalKeyboardKey.keyS) ? 1 : 0;
-    _moveDirection.normalize();
-    return super.onKeyEvent(event, keysPressed);
-  }
-
-  void shoot() {
-    if (_animation.current != PlayerAnimationState.shooting) {
-      _animation.current = PlayerAnimationState.shooting;
-      world.add(Bullet(position, Vector2(0, -1)..rotate(angle)));
-    }
   }
 }
 
 class Maze extends BodyComponent<Lost> {
-  Maze(this.size) : maze = generate(width: size, height: size, seed: 5);
-  final int size;
-  final List<List<Cell>> maze;
-
   @override
   Body createBody() {
     paint.color = Colors.black;
+    final maze = generate(width: game.mazeSize, height: game.mazeSize, seed: 5);
     final body = world.createBody(BodyDef(userData: this));
     for (var i = 0; i < maze.length; i++) {
       for (var j = 0; j < maze[i].length; j++) {
@@ -213,23 +118,103 @@ class Maze extends BodyComponent<Lost> {
   }
 }
 
-class Zombie extends BodyComponent<Lost> with ContactCallbacks {
-  Zombie(this.initalPosition);
-  Vector2 initalPosition;
-  final _speed = 8.0;
-  late final SpriteAnimationComponent _animation;
+enum State { walk, shoot }
+
+class Player extends BodyComponent<Lost> with KeyboardHandler {
+  final _moveSpeed = 600.0;
+  final _dir = Vector2.zero();
+  final _gunPoint = PositionComponent(position: Vector2(0.7, -2.4));
+  late final SpriteAnimationGroupComponent<State> _anim;
 
   @override
   Future<void> onLoad() async {
     super.onLoad();
+    final s1 = game.getSpriteSheet('sw.png', 1, 17);
+    final s2 = game.getSpriteSheet('ss.png', 1, 17);
+    _anim = SpriteAnimationGroupComponent<State>(
+      animations: {
+        State.walk: s1.createAnimation(row: 0, stepTime: 0.1),
+        State.shoot: s2.createAnimation(row: 0, stepTime: 0.08, loop: false),
+      },
+      size: Vector2.all(5),
+      current: State.walk,
+      anchor: Anchor.center,
+    );
+    await addAll([_anim, _gunPoint]);
 
-    final image = await game.images.load('zombie-walking.png');
-    final spriteSheet =
-        SpriteSheet.fromColumnsAndRows(image: image, columns: 11, rows: 1);
+    final shootTicker = _anim.animationTickers![State.shoot]!;
+    shootTicker.onComplete = () {
+      shootTicker.reset();
+      _anim.current = State.walk;
+    };
+
+    camera.follow(this);
+    renderBody = false;
+  }
+
+  @override
+  Body createBody() {
+    final body = world.createBody(
+      BodyDef(
+        type: BodyType.dynamic,
+        position: Vector2.all(game.wallWidth * 0.5),
+        userData: this,
+      ),
+    );
+    body.createFixtureFromShape(
+      CircleShape()
+        ..radius = 1
+        ..position.setValues(0, 0.8),
+    );
+    body.createFixtureFromShape(
+      CircleShape()
+        ..radius = 1.2
+        ..position.setValues(0.4, -0.9),
+    );
+    return body;
+  }
+
+  @override
+  void update(double dt) {
+    if (_anim.current == State.walk) {
+      _anim.animationTicker!.paused = _dir.isZero();
+    } else {
+      _dir.scale(0.25);
+    }
+    body.linearVelocity = _dir * _moveSpeed * dt;
+  }
+
+  @override
+  bool onKeyEvent(RawKeyEvent event, Set<LogicalKeyboardKey> keysPressed) {
+    _dir.setAll(0);
+    _dir.x += keysPressed.contains(LogicalKeyboardKey.keyA) ? -1 : 0;
+    _dir.x += keysPressed.contains(LogicalKeyboardKey.keyD) ? 1 : 0;
+    _dir.y += keysPressed.contains(LogicalKeyboardKey.keyW) ? -1 : 0;
+    _dir.y += keysPressed.contains(LogicalKeyboardKey.keyS) ? 1 : 0;
+    _dir.normalize();
+    return super.onKeyEvent(event, keysPressed);
+  }
+
+  void shoot() {
+    if (_anim.current != State.shoot) {
+      _anim.current = State.shoot;
+      world.add(Bullet(position, Vector2(0, -1)..rotate(angle)));
+    }
+  }
+}
+
+class Zombie extends BodyComponent<Lost> with ContactCallbacks {
+  Zombie(this.initalPosition);
+  Vector2 initalPosition;
+  final _speed = 8.0;
+
+  @override
+  Future<void> onLoad() async {
+    super.onLoad();
+    final spriteSheet = game.getSpriteSheet('zw.png', 1, 11);
     final anim = spriteSheet.createAnimation(row: 0, stepTime: 0.1);
-
     await add(
-      _animation = SpriteAnimationComponent(
+      SpriteAnimationComponent(
         animation: anim,
         size: Vector2.all(4),
         anchor: Anchor.center,
@@ -270,8 +255,8 @@ class Zombie extends BodyComponent<Lost> with ContactCallbacks {
 class Bullet extends BodyComponent with ContactCallbacks {
   Bullet(this.initalPosition, this.direction);
 
-  Vector2 initalPosition;
-  Vector2 direction;
+  final Vector2 initalPosition;
+  final Vector2 direction;
   final _speed = 50.0;
 
   @override
