@@ -1,0 +1,24 @@
+name: lost
+description: A top down maze game.
+publish_to: "none"
+version: 0.1.0
+
+environment:
+  sdk: ">=3.1.4 <4.0.0"
+
+dependencies:
+  flame: 1.10.0
+  flame_forge2d: 0.15.1
+  flutter:
+    sdk: flutter
+  maze_builder: 1.0.1
+
+dev_dependencies:
+  flame_lint: ^1.1.1
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
