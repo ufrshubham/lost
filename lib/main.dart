@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:math' hide Rectangle;
-
 import 'package:flame/components.dart';
 import 'package:flame/events.dart';
 import 'package:flame/experimental.dart';
@@ -14,6 +13,7 @@ import 'package:maze_builder/maze_builder.dart';
 
 final random = Random();
 final cam = CameraComponent.withFixedResolution(width: 320, height: 180);
+final cam2 = CameraComponent.withFixedResolution(width: 1280, height: 720);
 void main() => runApp(const GameWidget.controlled(gameFactory: Lost.new));
 
 class Lost extends Forge2DGame
@@ -23,19 +23,23 @@ class Lost extends Forge2DGame
   @override
   Color backgroundColor() => const Color.fromARGB(246, 152, 15, 15);
 
+  final mazeSize = 10;
   double get zoom => camera.viewfinder.zoom;
   double get wallWidth => 120 / zoom;
   double get wallThickness => 20 / zoom;
-  double get wallSize => 10 * wallWidth;
+  double get wallSize => mazeSize * wallWidth;
   Vector2 get virtualSize => camera.viewport.virtualSize * 0.5 / zoom;
 
-  final maze = Maze(10);
+  late final maze = Maze(mazeSize);
   final player = Player();
 
   @override
   Future<void> onLoad() async {
-    world.physicsWorld.setContactFilter(LostContactFilter());
     world = Forge2DWorld(children: [maze, player], gravity: Vector2.zero());
+    cam2.world = world;
+    cam2.viewfinder.anchor = Anchor.topLeft;
+    cam2.viewfinder.position = Vector2.all(-10);
+    add(cam2);
     camera.setBounds(
       Rectangle.fromLTRB(
         virtualSize.x,
@@ -59,13 +63,6 @@ class Lost extends Forge2DGame
 
   @override
   void onTapDown(TapDownEvent event) => player.shoot();
-}
-
-class LostContactFilter extends ContactFilter {
-  // @override
-  // bool shouldCollide(Fixture fixtureA, Fixture fixtureB) {
-  //   return super.shouldCollide(fixtureA, fixtureB);
-  // }
 }
 
 enum PlayerAnimationState { walking, shooting }
@@ -216,9 +213,11 @@ class Maze extends BodyComponent<Lost> {
   }
 }
 
-class Zombie extends BodyComponent<Lost> {
+class Zombie extends BodyComponent<Lost> with ContactCallbacks {
   Zombie(this.initalPosition);
   Vector2 initalPosition;
+  final _speed = 8.0;
+  late final SpriteAnimationComponent _animation;
 
   @override
   Future<void> onLoad() async {
@@ -230,7 +229,7 @@ class Zombie extends BodyComponent<Lost> {
     final anim = spriteSheet.createAnimation(row: 0, stepTime: 0.1);
 
     await add(
-      SpriteAnimationComponent(
+      _animation = SpriteAnimationComponent(
         animation: anim,
         size: Vector2.all(4),
         anchor: Anchor.center,
@@ -241,15 +240,30 @@ class Zombie extends BodyComponent<Lost> {
 
   @override
   Body createBody() {
+    final initalAngle = pi * random.nextDouble();
     final body = world.createBody(
       BodyDef(
         type: BodyType.dynamic,
         position: initalPosition,
         userData: this,
-        angle: pi * random.nextDouble(),
+        angle: initalAngle,
+        linearVelocity: Vector2(0, 1)
+          ..scale(_speed)
+          ..rotate(initalAngle),
       ),
     );
     return body..createFixtureFromShape(CircleShape()..radius = 1);
+  }
+
+  @override
+  void beginContact(Object other, Contact contact) {
+    if (other is Maze || other is Zombie) {
+      final newAngle = random.nextDouble();
+      body.linearVelocity = Vector2(0, 1)
+        ..scale(_speed)
+        ..rotate(newAngle);
+    }
+    super.beginContact(other, contact);
   }
 }
 
