@@ -16,12 +16,9 @@ final random = Random();
 final tp = TextPaint(style: const TextStyle(fontSize: 10));
 final text = TextComponent(textRenderer: tp, anchor: Anchor.center);
 final fill = SpriteComponent(position: Vector2.all(-1), priority: -1);
-final cam = CameraComponent.withFixedResolution(
-  width: 320,
-  height: 180,
-  hudComponents: [text],
-);
-final cam2 = CameraComponent.withFixedResolution(width: 1280, height: 720);
+final cam = CameraComponent.withFixedResolution(width: 320, height: 180);
+final bDef = BodyDef(type: BodyType.dynamic, bullet: true);
+typedef Sac = SpriteAnimationComponent;
 void main() => runApp(const GameWidget.controlled(gameFactory: Lost.new));
 
 class Lost extends Forge2DGame
@@ -35,11 +32,9 @@ class Lost extends Forge2DGame
   double get zoom => camera.viewfinder.zoom;
   double get wallW => 120 / zoom;
   double get wallT => 20 / zoom;
-  double get wallSize => mazeSize * wallW;
   Vector2 get virtualSize => camera.viewport.virtualSize * 0.5 / zoom;
   var _elapsed = 0.0;
 
-  final maze = Maze();
   final player = Player();
 
   @override
@@ -49,18 +44,14 @@ class Lost extends Forge2DGame
     await images.loadAll(['ss.png', 'sw.png', 'zw.png']);
     fill.sprite = await Sprite.load('fill.png');
     await fill.add(OpacityEffect.fadeOut(LinearEffectController(2)));
-    cam.viewport.add(fill..scale = Vector2.all(5));
-    world = Forge2DWorld(children: [maze, player], gravity: Vector2.zero());
-    cam2.world = world;
-    cam2.viewfinder.anchor = Anchor.topLeft;
-    cam2.viewfinder.position = Vector2.all(-10);
-    //add(cam2);
+    await cam.viewport.addAll([fill..scale = Vector2.all(5), text]);
+    world = Forge2DWorld(children: [Maze(), player], gravity: Vector2.zero());
     camera.setBounds(
       Rectangle.fromLTRB(
         virtualSize.x,
         virtualSize.y,
-        wallSize - virtualSize.x,
-        wallSize - virtualSize.y,
+        mazeSize * wallW - virtualSize.x,
+        mazeSize * wallW - virtualSize.y,
       ),
     );
   }
@@ -151,7 +142,6 @@ enum State { walk, shoot }
 
 class Player extends BodyComponent<Lost>
     with KeyboardHandler, ContactCallbacks {
-  final _moveSpeed = 600.0;
   final _dir = Vector2.zero();
   bool dead = false;
   late final s1 = game.getSpriteSheet('sw.png', 1, 17);
@@ -171,9 +161,8 @@ class Player extends BodyComponent<Lost>
     super.onLoad();
     await add(_anim);
 
-    final shootTicker = _anim.animationTickers![State.shoot]!;
-    shootTicker.onComplete = () {
-      shootTicker.reset();
+    _anim.animationTickers![State.shoot]?.onComplete = () {
+      _anim.animationTickers![State.shoot]?.reset();
       _anim.current = State.walk;
     };
 
@@ -207,7 +196,7 @@ class Player extends BodyComponent<Lost>
     } else {
       _dir.scale(0.5);
     }
-    body.linearVelocity = _dir * _moveSpeed * dt;
+    body.linearVelocity = _dir * 600 * dt;
   }
 
   @override
@@ -245,7 +234,6 @@ class Zombie extends BodyComponent<Lost> implements RayCastCallback {
   Zombie(this.initalPosition);
 
   var _elapsed = 0.0;
-  final _speed = 15.0;
   final Vector2 initalPosition;
   Vector2 get _target => Vector2(0, -5)..rotate(angle, center: position);
 
@@ -254,13 +242,8 @@ class Zombie extends BodyComponent<Lost> implements RayCastCallback {
     super.onLoad();
     final spriteSheet = game.getSpriteSheet('zw.png', 1, 11);
     final anim = spriteSheet.createAnimation(row: 0, stepTime: 0.1);
-    await add(
-      SpriteAnimationComponent(
-        animation: anim,
-        size: Vector2.all(4),
-        anchor: Anchor.center,
-      ),
-    );
+    final s = Sac(animation: anim, size: Vector2.all(4), anchor: Anchor.center);
+    await add(s);
     renderBody = false;
   }
 
@@ -270,7 +253,7 @@ class Zombie extends BodyComponent<Lost> implements RayCastCallback {
           type: BodyType.dynamic,
           position: initalPosition.scaled(game.wallW),
           userData: this,
-          linearVelocity: Vector2(0, -1)..scale(_speed),
+          linearVelocity: Vector2(0, -1)..scale(15),
         ),
       )..createFixtureFromShape(CircleShape()..radius = 1.2);
 
@@ -289,7 +272,7 @@ class Zombie extends BodyComponent<Lost> implements RayCastCallback {
     if (ud is Maze || ud is Zombie && (p - position).length < 4) {
       final newAngle = angle + pi * 0.5;
       body.linearVelocity = Vector2(0, -1)
-        ..scale(_speed)
+        ..scale(15)
         ..rotate(newAngle);
       body.setTransform(position, newAngle);
       return fr;
@@ -300,20 +283,16 @@ class Zombie extends BodyComponent<Lost> implements RayCastCallback {
 
 class Bullet extends BodyComponent with ContactCallbacks {
   Bullet(this.initalPosition, this.direction);
-
   final Vector2 initalPosition;
   final Vector2 direction;
   final _speed = 50.0;
 
   @override
   Body createBody() => world.createBody(
-        BodyDef(
-          type: BodyType.dynamic,
-          bullet: true,
-          position: initalPosition,
-          linearVelocity: direction.scaled(_speed),
-          userData: this,
-        ),
+        bDef
+          ..position = initalPosition
+          ..linearVelocity = direction.scaled(_speed)
+          ..userData = this,
       )..createFixture(FixtureDef(CircleShape()..radius = 0.1, isSensor: true));
 
   @override
