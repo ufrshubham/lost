@@ -108,7 +108,6 @@ class Maze extends BodyComponent<Lost> {
   Body createBody() {
     paint.color = Colors.black;
     final s = random.nextInt(100);
-    print('Seed: $s');
     final maze = generate(width: game.mazeSize, height: game.mazeSize, seed: s);
     final body = world.createBody(BodyDef(userData: this));
     for (var i = 0; i < maze.length; i++) {
@@ -213,8 +212,8 @@ class Player extends BodyComponent<Lost>
 
   @override
   bool onKeyEvent(RawKeyEvent event, Set<LogicalKeyboardKey> keysPressed) {
+    _dir.setAll(0);
     if (!dead) {
-      _dir.setAll(0);
       _dir.x += keysPressed.contains(LogicalKeyboardKey.keyA) ? -1 : 0;
       _dir.x += keysPressed.contains(LogicalKeyboardKey.keyD) ? 1 : 0;
       _dir.y += keysPressed.contains(LogicalKeyboardKey.keyW) ? -1 : 0;
@@ -331,7 +330,7 @@ class Bullet extends BodyComponent with ContactCallbacks {
 }
 
 class Exit extends BodyComponent<Lost> with ContactCallbacks {
-  Exit(this.initalPosition);
+  Exit(this.initalPosition) : super(priority: -1);
   final Vector2 initalPosition;
 
   @override
@@ -340,10 +339,7 @@ class Exit extends BodyComponent<Lost> with ContactCallbacks {
     return world.createBody(
       BodyDef(position: initalPosition..scale(game.wallW), userData: this),
     )..createFixture(
-        FixtureDef(
-          PolygonShape()..setAsBoxXY(game.wallW * 0.25, game.wallW * 0.25),
-          isSensor: true,
-        ),
+        FixtureDef(CircleShape()..radius = game.wallW * 0.25, isSensor: true),
       );
   }
 
