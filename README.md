@@ -2,6 +2,10 @@
 
 A top-down shooter where you are lost in a maze-like structure filled with zombies. Although they don't seem to notice your presence, they are still deadly. You need to get to the exit safely, and all you have is a shotgun that you barely know how to use.
 
+## Play/Download
+
+- [Itch.io](https://ufrshubham.itch.io/lost)
+
 ## Demo
 
 ![Demo1](branding/Demo1.gif)
