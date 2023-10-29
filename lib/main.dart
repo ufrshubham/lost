@@ -7,6 +7,7 @@ import 'package:flame/experimental.dart';
 import 'package:flame/game.dart';
 import 'package:flame/input.dart';
 import 'package:flame/sprite.dart';
+import 'package:flame_audio/flame_audio.dart';
 import 'package:flame_forge2d/flame_forge2d.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -39,6 +40,7 @@ class Lost extends Forge2DGame
 
   @override
   Future<void> onLoad() async {
+    await FlameAudio.bgm.play('ha-simplestring_1.wav');
     text.position = cam.viewport.virtualSize * 0.5;
     text.text = 'Escape the maze';
     await images.loadAll(['ss.png', 'sw.png', 'zw.png']);
