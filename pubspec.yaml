@@ -18,9 +18,26 @@ dev_dependencies:
   flame_lint: ^1.1.1
   flutter_test:
     sdk: flutter
+  icons_launcher: 2.1.4
 
 flutter:
   uses-material-design: true
   assets:
     - assets/images/
     - assets/audio/
+
+icons_launcher:
+  image_path: "assets/images/Lost-Icon.png"
+  platforms:
+    linux:
+      enable: true
+    windows:
+      enable: true
+    web:
+      enable: true
+    android:
+      enable: false
+    ios:
+      enable: false
+    macos:
+      enable: false
